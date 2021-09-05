@@ -12,6 +12,9 @@
  * PongMode is a game mode that implements a single-player game of Pong.
  */
 
+#define CURSOR_NORMAL 0
+#define CURSOR_BUY 1
+
 struct PongMode : Mode {
 	PongMode();
 	virtual ~PongMode();
@@ -26,6 +29,7 @@ struct PongMode : Mode {
 	glm::vec2 court_radius = glm::vec2(7.0f, 5.0f);
 	glm::vec2 paddle_radius = glm::vec2(0.2f, 1.0f);
 	glm::vec2 ball_radius = glm::vec2(0.2f, 0.2f);
+	glm::vec2 building_radius = glm::vec2(0.1f, 0.1f);
 
 	glm::vec2 left_paddle = glm::vec2(-court_radius.x + 0.5f, 0.0f);
 	glm::vec2 right_paddle = glm::vec2( court_radius.x - 0.5f, 0.0f);
@@ -38,6 +42,10 @@ struct PongMode : Mode {
 
 	float ai_offset = 0.0f;
 	float ai_offset_update = 0.0f;
+
+	int cursor_mode = CURSOR_NORMAL;
+	glm::vec2 cursor_pos;
+	std::vector<glm::vec2> buildings;
 
 	//----- pretty gradient trails -----
 

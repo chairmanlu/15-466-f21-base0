@@ -125,7 +125,26 @@ bool PongMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			(evt.motion.x + 0.5f) / window_size.x * 2.0f - 1.0f,
 			(evt.motion.y + 0.5f) / window_size.y *-2.0f + 1.0f
 		);
+		cursor_pos = clip_to_court * glm::vec3(clip_mouse, 1.0f);
+
 		left_paddle.y = (clip_to_court * glm::vec3(clip_mouse, 1.0f)).y;
+	}
+	if (evt.type == SDL_MOUSEBUTTONUP){
+		std::cout << "Click!" << std::endl;
+		std::cout << "(" << cursor_pos.x << "," << cursor_pos.y << ")" << std::endl;
+		if(cursor_mode == CURSOR_BUY){
+			buildings.push_back(glm::vec2(cursor_pos.x,cursor_pos.y));
+		}
+	}
+
+	if (evt.type == SDL_KEYUP && evt.key.keysym.sym == SDLK_SPACE){
+		std::cout << "Space Pressed!" << std::endl;
+		if(cursor_mode == CURSOR_NORMAL){
+			cursor_mode = CURSOR_BUY;
+		}
+		else{
+			cursor_mode = CURSOR_NORMAL;
+		}
 	}
 
 	return false;
@@ -285,6 +304,7 @@ void PongMode::draw(glm::uvec2 const &drawable_size) {
 		vertices.emplace_back(glm::vec3(center.x-radius.x, center.y+radius.y, 0.0f), color, glm::vec2(0.5f, 0.5f));
 	};
 
+
 	//shadows for everything (except the trail):
 
 	glm::vec2 s = glm::vec2(0.0f,-shadow_offset);
@@ -357,6 +377,16 @@ void PongMode::draw(glm::uvec2 const &drawable_size) {
 	//ball:
 	draw_rectangle(ball, ball_radius, fg_color);
 
+	//buildings:
+	for(int i=0;i<buildings.size();i++){
+		draw_rectangle(glm::vec2(buildings[i]),glm::vec2(building_radius), fg_color);
+	}
+
+	//building outline
+	if(cursor_mode == CURSOR_BUY){
+		draw_rectangle(cursor_pos,glm::vec2(building_radius), fg_color);
+	}
+
 	//scores:
 	glm::vec2 score_radius = glm::vec2(0.1f, 0.1f);
 	for (uint32_t i = 0; i < left_score; ++i) {
@@ -365,8 +395,6 @@ void PongMode::draw(glm::uvec2 const &drawable_size) {
 	for (uint32_t i = 0; i < right_score; ++i) {
 		draw_rectangle(glm::vec2( court_radius.x - (2.0f + 3.0f * i) * score_radius.x, court_radius.y + 2.0f * wall_radius + 2.0f * score_radius.y), score_radius, fg_color);
 	}
-
-
 
 	//------ compute court-to-window transform ------
 
