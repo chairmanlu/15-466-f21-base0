@@ -12,8 +12,21 @@
  * PongMode is a game mode that implements a single-player game of Pong.
  */
 
-#define CURSOR_NORMAL 0
-#define CURSOR_BUY 1
+#define CURSOR_NORMAL -1
+
+#define BUILDING_SHOOTER 3
+#define BUILDING_WALL 1
+#define BUILDING_FARM 2
+
+#define INCOME_COOL 5.0f
+
+#define SHOOTER_COOL 5.0f
+#define WALL_COOL 15.0f
+#define FARM_COOL 10.0f
+
+#define SHOOTER_PRICE 2
+#define WALL_PRICE 1
+#define FARM_PRICE 5
 
 struct PongMode : Mode {
 	PongMode();
@@ -26,13 +39,16 @@ struct PongMode : Mode {
 
 	//----- game state -----
 
-	glm::vec2 court_radius = glm::vec2(7.0f, 5.0f);
+	glm::vec2 court_radius = glm::vec2(10.0f, 5.0f);
 	glm::vec2 paddle_radius = glm::vec2(0.2f, 1.0f);
 	glm::vec2 ball_radius = glm::vec2(0.2f, 0.2f);
-	glm::vec2 building_radius = glm::vec2(0.1f, 0.1f);
+	glm::vec2 building_radius = glm::vec2(0.25f, 0.25f);
 
-	glm::vec2 left_paddle = glm::vec2(-court_radius.x + 0.5f, 0.0f);
-	glm::vec2 right_paddle = glm::vec2( court_radius.x - 0.5f, 0.0f);
+	float base_length = 5.0f;
+	float buffer_radius = 0.1f;
+
+	glm::vec2 left_paddle = glm::vec2(-court_radius.x + base_length, 0.0f);
+	glm::vec2 right_paddle = glm::vec2( court_radius.x - base_length, 0.0f);
 
 	glm::vec2 ball = glm::vec2(0.0f, 0.0f);
 	glm::vec2 ball_velocity = glm::vec2(-1.0f, 0.0f);
@@ -40,17 +56,73 @@ struct PongMode : Mode {
 	uint32_t left_score = 0;
 	uint32_t right_score = 0;
 
+	uint32_t left_money = 0;
+	uint32_t right_money = 0;
+
+	int left_health = 100;
+	int right_health = 100;
+
 	float ai_offset = 0.0f;
 	float ai_offset_update = 0.0f;
 
 	int cursor_mode = CURSOR_NORMAL;
 	glm::vec2 cursor_pos;
 	std::vector<glm::vec2> buildings;
+	std::vector<int> building_types;
+	std::vector<float> building_cooldowns;
+
+	float income_cooldown = INCOME_COOL;
+
+	std::vector<glm::vec2> left_bullets;
+	std::vector<glm::vec2> right_bullets;
+	glm::vec2 bullet_radius = glm::vec2(0.1f, 0.1f);
+	float bullet_speed = 1.0f;
+
+	//AI
+	int next_purchase = BUILDING_SHOOTER;
 
 	//----- pretty gradient trails -----
 
 	float trail_length = 1.3f;
 	std::deque< glm::vec3 > ball_trail; //stores (x,y,age), oldest elements first
+
+	//Game logic helpers
+	bool overlaps(glm::vec2 c1, glm::vec2 r1, glm::vec2 c2, glm::vec2 r2){
+		//Collision detenction from starter code
+		glm::vec2 min = glm::max(c1 - r1, c2 - r2);
+		glm::vec2 max = glm::min(c1 + r1, c2 + r2);
+
+		return !(min.x > max.x || min.y > max.y);
+	}
+
+	bool overlaps_buildings(glm::vec2 c, glm::vec2 r){
+		for(int i=0;i<buildings.size();i++){
+			if(overlaps(c,r,buildings[i],building_radius)){
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool in_base(glm::vec2 c, glm::vec2 r){
+		glm::vec2 min = c-r;
+		glm::vec2 max = c+r;
+
+		return !(min.x < -1.0f * court_radius.x || min.y < -1.0f * court_radius.y
+		    || max.x > -court_radius.x + base_length - paddle_radius.x - buffer_radius || max.y > court_radius.y);
+	}
+
+	bool enough_money(){
+		switch(next_purchase){
+			case BUILDING_SHOOTER:
+				return right_money >= SHOOTER_PRICE;
+			case BUILDING_WALL:
+				return right_money >= WALL_PRICE;
+			case BUILDING_FARM:
+				return right_money >= FARM_PRICE;
+		}
+		return false;
+	}
 
 	//----- opengl assets / helpers ------
 

@@ -10,6 +10,8 @@
 
 PongMode::PongMode() {
 
+	srand((unsigned int) time(NULL));
+
 	//set up trail as if ball has been here for 'forever':
 	ball_trail.clear();
 	ball_trail.emplace_back(ball, trail_length);
@@ -118,7 +120,6 @@ PongMode::~PongMode() {
 }
 
 bool PongMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size) {
-
 	if (evt.type == SDL_MOUSEMOTION) {
 		//convert mouse from window pixels (top-left origin, +y is down) to clip space ([-1,1]x[-1,1], +y is up):
 		glm::vec2 clip_mouse = glm::vec2(
@@ -130,20 +131,48 @@ bool PongMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 		left_paddle.y = (clip_to_court * glm::vec3(clip_mouse, 1.0f)).y;
 	}
 	if (evt.type == SDL_MOUSEBUTTONUP){
-		std::cout << "Click!" << std::endl;
-		std::cout << "(" << cursor_pos.x << "," << cursor_pos.y << ")" << std::endl;
-		if(cursor_mode == CURSOR_BUY){
-			buildings.push_back(glm::vec2(cursor_pos.x,cursor_pos.y));
+		if(cursor_mode != CURSOR_NORMAL && !overlaps_buildings(cursor_pos,building_radius) && in_base(cursor_pos,building_radius)){
+			switch(cursor_mode){
+				case BUILDING_SHOOTER:
+					if(cursor_mode == BUILDING_SHOOTER && left_money >= SHOOTER_PRICE){
+						building_cooldowns.push_back(SHOOTER_COOL);
+						buildings.push_back(glm::vec2(cursor_pos.x,cursor_pos.y));
+						building_types.push_back(cursor_mode);
+						left_money -= SHOOTER_PRICE;
+					}
+					break;
+				case BUILDING_WALL:
+					if(left_money >= WALL_PRICE){
+						buildings.push_back(glm::vec2(cursor_pos.x,cursor_pos.y));
+						building_types.push_back(cursor_mode);
+						building_cooldowns.push_back(WALL_COOL);
+						left_money -= WALL_PRICE;
+					}
+					break;
+				case BUILDING_FARM:
+					if (left_money >= FARM_PRICE){
+						building_cooldowns.push_back(FARM_COOL);
+						buildings.push_back(glm::vec2(cursor_pos.x,cursor_pos.y));
+						building_types.push_back(cursor_mode);
+						left_money -= FARM_PRICE;
+					}
+					break;
+			}
 		}
 	}
 
-	if (evt.type == SDL_KEYUP && evt.key.keysym.sym == SDLK_SPACE){
-		std::cout << "Space Pressed!" << std::endl;
-		if(cursor_mode == CURSOR_NORMAL){
-			cursor_mode = CURSOR_BUY;
-		}
-		else{
+	if (evt.type == SDL_KEYUP){
+		if(evt.key.keysym.sym == SDLK_SPACE){
 			cursor_mode = CURSOR_NORMAL;
+		}
+		else if(evt.key.keysym.sym == SDLK_q){
+			cursor_mode = BUILDING_SHOOTER;
+		}
+		else if(evt.key.keysym.sym == SDLK_w){
+			cursor_mode = BUILDING_WALL;
+		}
+		else if(evt.key.keysym.sym == SDLK_e){
+			cursor_mode = BUILDING_FARM;
 		}
 	}
 
@@ -163,11 +192,74 @@ void PongMode::update(float elapsed) {
 			ai_offset_update = (mt() / float(mt.max())) * 0.5f + 0.5f;
 			ai_offset = (mt() / float(mt.max())) * 2.5f - 1.25f;
 		}
-		if (right_paddle.y < ball.y + ai_offset) {
-			right_paddle.y = std::min(ball.y + ai_offset, right_paddle.y + 2.0f * elapsed);
-		} else {
-			right_paddle.y = std::max(ball.y + ai_offset, right_paddle.y - 2.0f * elapsed);
+		if(ball.x < right_paddle.x){
+			if (right_paddle.y < ball.y + ai_offset) {
+				right_paddle.y = std::min(ball.y + ai_offset, right_paddle.y + 2.0f * elapsed);
+			} else {
+				right_paddle.y = std::max(ball.y + ai_offset, right_paddle.y - 2.0f * elapsed);
+			}
 		}
+		//Avoid ball if behind the paddle
+		else{
+			if (right_paddle.y < ball.y + ai_offset) {
+				right_paddle.y = std::min(ball.y + ai_offset, right_paddle.y - 2.0f * elapsed);
+			} else {
+				right_paddle.y = std::max(ball.y + ai_offset, right_paddle.y + 2.0f * elapsed);
+			}
+		}
+
+		if(enough_money()){
+			int tries = 0;
+			while(tries++ < 1000){
+				//Random number generation from https://stackoverflow.com/questions/686353/random-float-number-generation
+				float x = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+				x = court_radius.x - x * (base_length - 2.0f * building_radius.x - buffer_radius) - building_radius.x;
+				float y = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+				y = (2.0f * y - 1.0f) * (court_radius.y - 2.0f * building_radius.y);
+
+				glm::vec2 pos = glm::vec2(x,y);
+				if(!overlaps_buildings(pos, building_radius)){
+					switch(next_purchase){
+						case BUILDING_SHOOTER:
+							if(right_money >= SHOOTER_PRICE){
+								building_cooldowns.push_back(SHOOTER_COOL);
+								buildings.push_back(glm::vec2(pos.x,pos.y));
+								building_types.push_back(-1 * BUILDING_SHOOTER);
+								right_money -= SHOOTER_PRICE;
+							}
+							break;
+						case BUILDING_WALL:
+							if(right_money >= WALL_PRICE){
+								buildings.push_back(glm::vec2(pos.x,pos.y));
+								building_types.push_back(BUILDING_WALL);
+								building_cooldowns.push_back(WALL_COOL);
+								right_money -= WALL_PRICE;
+							}
+							break;
+						case BUILDING_FARM:
+							if (right_money >= FARM_PRICE){
+								building_cooldowns.push_back(FARM_COOL);
+								buildings.push_back(glm::vec2(pos.x,pos.y));
+								building_types.push_back(-1 * BUILDING_FARM);
+								right_money -= FARM_PRICE;
+							}
+							break;
+					}
+					
+					next_purchase = rand() % 3 + 1;
+
+					break;
+				}
+			}
+		}
+	}
+
+	//passive income
+	income_cooldown -= elapsed;
+	while(income_cooldown < 0){
+		income_cooldown += INCOME_COOL;
+		left_money++;
+		right_money++;
 	}
 
 	//clamp paddles to court:
@@ -179,13 +271,57 @@ void PongMode::update(float elapsed) {
 
 	//----- ball update -----
 
-	//speed of ball doubles every four points:
+	//speed of ball increases every second:
 	float speed_multiplier = 4.0f * std::pow(2.0f, (left_score + right_score) / 4.0f);
 
 	//velocity cap, though (otherwise ball can pass through paddles):
 	speed_multiplier = std::min(speed_multiplier, 10.0f);
 
 	ball += elapsed * speed_multiplier * ball_velocity;
+
+	//---- building cooldowns ----
+	for(int i=0;i<buildings.size();i++){
+		building_cooldowns[i] -= elapsed;
+		while(building_cooldowns[i] < 0){
+			switch(abs(building_types[i])){
+				case BUILDING_SHOOTER:
+					//spawn bullet
+					if(building_types[i] == BUILDING_SHOOTER){
+						glm::vec2 pos = glm::vec2(buildings[i].x, buildings[i].y);
+						pos.x += building_radius.x + 2.0f * bullet_radius.x;
+						left_bullets.push_back(pos);
+					}
+					else{
+						glm::vec2 pos = glm::vec2(buildings[i].x, buildings[i].y);
+						pos.x -= building_radius.x + 2.0f * bullet_radius.x;
+						right_bullets.push_back(pos);
+					}
+					building_cooldowns[i] += SHOOTER_COOL;
+					break;
+				case BUILDING_WALL:
+					building_cooldowns[i] += WALL_COOL;
+					break;
+				case BUILDING_FARM:
+					//Increase money
+					if(building_types[i] == BUILDING_FARM){
+						left_money++;
+					}
+					else{
+						right_money++;
+					}
+					building_cooldowns[i] += FARM_COOL;
+					break;
+			}
+		}
+	}
+
+	for(int i=0;i<left_bullets.size();i++){
+		left_bullets[i].x += elapsed * bullet_speed;
+	}
+	for(int i=0;i<right_bullets.size();i++){
+		right_bullets[i].x -= elapsed * bullet_speed;
+	}
+
 
 	//---- collision handling ----
 
@@ -224,6 +360,47 @@ void PongMode::update(float elapsed) {
 	paddle_vs_ball(left_paddle);
 	paddle_vs_ball(right_paddle);
 
+	for(int i=0;i<buildings.size();i++){
+		if(overlaps(ball,ball_radius,buildings[i],building_radius)){
+			//Bounce back if hit wall
+			if(abs(building_types[i]) == BUILDING_WALL){
+				//Collision detection from above
+				glm::vec2 min = glm::max(buildings[i] - building_radius, ball - ball_radius);
+				glm::vec2 max = glm::min(buildings[i] + building_radius, ball + ball_radius);
+
+				//if no overlap, no collision:
+				if (min.x > max.x || min.y > max.y) return;
+
+				if (max.x - min.x > max.y - min.y) {
+					//wider overlap in x => bounce in y direction:
+					if (ball.y > buildings[i].y) {
+						ball.y = buildings[i].y + building_radius.y + ball_radius.y;
+						ball_velocity.y = std::abs(ball_velocity.y);
+					} else {
+						ball.y = buildings[i].y - building_radius.y - ball_radius.y;
+						ball_velocity.y = -std::abs(ball_velocity.y);
+					}
+				} else {
+					//wider overlap in y => bounce in x direction:
+					if (ball.x > buildings[i].x) {
+						ball.x = buildings[i].x + building_radius.x + ball_radius.x;
+						ball_velocity.x = std::abs(ball_velocity.x);
+					} else {
+						ball.x = buildings[i].x - building_radius.x - ball_radius.x;
+						ball_velocity.x = -std::abs(ball_velocity.x);
+					}
+					//warp y velocity based on offset from buildings[i] center:
+					float vel = (ball.y - buildings[i].y) / (building_radius.y + ball_radius.y);
+					ball_velocity.y = glm::mix(ball_velocity.y, vel, 0.75f);
+				}
+
+			}
+			buildings.erase(buildings.begin() + i);
+			building_types.erase(building_types.begin() + i);
+		}
+	}
+
+
 	//court walls:
 	if (ball.y > court_radius.y - ball_radius.y) {
 		ball.y = court_radius.y - ball_radius.y;
@@ -242,17 +419,87 @@ void PongMode::update(float elapsed) {
 		ball.x = court_radius.x - ball_radius.x;
 		if (ball_velocity.x > 0.0f) {
 			ball_velocity.x = -ball_velocity.x;
-			left_score += 1;
+			right_health -= 10;
+			if(right_health < 0){
+				right_health = 0;
+			}
 		}
 	}
 	if (ball.x < -court_radius.x + ball_radius.x) {
 		ball.x = -court_radius.x + ball_radius.x;
 		if (ball_velocity.x < 0.0f) {
 			ball_velocity.x = -ball_velocity.x;
-			right_score += 1;
+			left_health -= 10;
+			if(left_health < 0){
+				left_health = 0;
+			}
 		}
 	}
 
+	//Bullet collisions
+	
+	for(int i=0;i<left_bullets.size();i++){
+		//walls from above
+		if (left_bullets[i].x > court_radius.x - bullet_radius.x) {
+			left_bullets.erase(left_bullets.begin() + i);
+			right_health -= 5;
+			if(right_health < 0){
+				right_health = 0;
+			}
+		}
+
+		//Paddles
+		if(overlaps(left_paddle,paddle_radius,left_bullets[i], bullet_radius) ||
+		   overlaps(right_paddle,paddle_radius,left_bullets[i], bullet_radius)){
+			left_bullets.erase(left_bullets.begin() + i);
+		}
+
+		//Buildings
+		for(int j=0;j<buildings.size();j++){
+			if(overlaps(buildings[j],building_radius,left_bullets[i],bullet_radius)){
+				if(abs(building_types[j]) != BUILDING_WALL){
+					buildings.erase(buildings.begin() + j);
+					building_types.erase(building_types.begin() + j);
+
+				}
+				left_bullets.erase(left_bullets.begin() + i);
+			}
+
+		}
+	}
+
+	for(int i=0;i<right_bullets.size();i++){
+		//walls from above
+		if (right_bullets[i].x < -court_radius.x + bullet_radius.x) {
+			std::cout << "here\n" << std::endl;
+			right_bullets.erase(right_bullets.begin() + i);
+			left_health -= 5;
+			if(left_health < 0){
+				left_health = 0;
+			}
+		}
+
+		//Paddles
+		if(overlaps(left_paddle,paddle_radius,right_bullets[i], bullet_radius) ||
+		   overlaps(right_paddle,paddle_radius,right_bullets[i], bullet_radius)){
+			right_bullets.erase(right_bullets.begin() + i);
+		}
+
+		//Buildings
+		for(int j=0;j<buildings.size();j++){
+			if(overlaps(buildings[j],building_radius,right_bullets[i],bullet_radius)){
+				if(abs(building_types[j]) != BUILDING_WALL){
+					buildings.erase(buildings.begin() + j);
+					building_types.erase(building_types.begin() + j);
+
+				}
+				right_bullets.erase(right_bullets.begin() + i);
+			}
+
+		}
+	}
+	
+	
 	//----- gradient trails -----
 
 	//age up all locations in ball trail:
@@ -267,6 +514,10 @@ void PongMode::update(float elapsed) {
 	while (ball_trail.size() >= 2 && ball_trail[1].z > trail_length) {
 		ball_trail.pop_front();
 	}
+
+	if(left_health == 0 || right_health == 0){
+		Mode::set_current(std::make_shared< PongMode >());
+	}
 }
 
 void PongMode::draw(glm::uvec2 const &drawable_size) {
@@ -275,6 +526,15 @@ void PongMode::draw(glm::uvec2 const &drawable_size) {
 	const glm::u8vec4 bg_color = HEX_TO_U8VEC4(0x193b59ff);
 	const glm::u8vec4 fg_color = HEX_TO_U8VEC4(0xf2d2b6ff);
 	const glm::u8vec4 shadow_color = HEX_TO_U8VEC4(0xf2ad94ff);
+	const glm::u8vec4 valid_color = HEX_TO_U8VEC4(0x00ff0080);
+	const glm::u8vec4 invalid_color = HEX_TO_U8VEC4(0xff000080);
+	const glm::u8vec4 money_color = HEX_TO_U8VEC4(0xffee00ff);
+	const glm::u8vec4 shooter_color1 = HEX_TO_U8VEC4(0xffffffff);
+	const glm::u8vec4 shooter_color2 = HEX_TO_U8VEC4(0x000000ff);
+	const glm::u8vec4 wall_color = HEX_TO_U8VEC4(0xffffffff);
+	const glm::u8vec4 wall_preview_color = HEX_TO_U8VEC4(0xffffff80);
+	const glm::u8vec4 farm_color1 = HEX_TO_U8VEC4(0x0db507ff);
+	const glm::u8vec4 farm_color2 = HEX_TO_U8VEC4(0xbd6f17ff);
 	const std::vector< glm::u8vec4 > trail_colors = {
 		HEX_TO_U8VEC4(0xf2ad9488),
 		HEX_TO_U8VEC4(0xf2897288),
@@ -378,22 +638,90 @@ void PongMode::draw(glm::uvec2 const &drawable_size) {
 	draw_rectangle(ball, ball_radius, fg_color);
 
 	//buildings:
+	
+	auto draw_shooter = [&](glm::vec2 pos){
+		draw_rectangle(glm::vec2(pos),glm::vec2(building_radius), shooter_color1);
+		draw_rectangle(glm::vec2(pos),glm::vec2(building_radius / 2.0f), shooter_color2);
+	};
+
+	auto draw_wall = [&](glm::vec2 pos){
+		draw_rectangle(glm::vec2(pos),glm::vec2(building_radius), wall_color);
+	};
+
+	auto draw_farm = [&](glm::vec2 pos){
+		draw_rectangle(glm::vec2(pos),glm::vec2(building_radius), farm_color1);
+		draw_rectangle(glm::vec2(pos),glm::vec2(building_radius.x / 4.0f, building_radius.y), farm_color2);
+		draw_rectangle(glm::vec2(pos),glm::vec2(building_radius.x, building_radius.y / 4.0f), farm_color2);
+	};
+
 	for(int i=0;i<buildings.size();i++){
-		draw_rectangle(glm::vec2(buildings[i]),glm::vec2(building_radius), fg_color);
+		switch(abs(building_types[i])){
+			case BUILDING_SHOOTER:
+				draw_shooter(buildings[i]);
+				break;
+			case BUILDING_WALL:
+				draw_wall(buildings[i]);
+				break;
+			case BUILDING_FARM:
+				draw_farm(buildings[i]);
+				break;
+		}
+	}
+
+	//bullets
+	for(int i=0;i<left_bullets.size();i++){
+		draw_rectangle(glm::vec2(left_bullets[i]),glm::vec2(bullet_radius), fg_color);
+	}
+	for(int i=0;i<right_bullets.size();i++){
+		draw_rectangle(glm::vec2(right_bullets[i]),glm::vec2(bullet_radius), fg_color);
 	}
 
 	//building outline
-	if(cursor_mode == CURSOR_BUY){
-		draw_rectangle(cursor_pos,glm::vec2(building_radius), fg_color);
+	switch(cursor_mode){
+		case BUILDING_FARM:
+			draw_farm(cursor_pos);
+			if(overlaps_buildings(cursor_pos,building_radius) || !in_base(cursor_pos, building_radius) || left_money < FARM_PRICE){
+				draw_rectangle(cursor_pos,glm::vec2(building_radius), invalid_color);
+			}
+			else{
+				draw_rectangle(cursor_pos,glm::vec2(building_radius), valid_color);
+			}
+			break;
+		case BUILDING_SHOOTER:
+			draw_shooter(cursor_pos);
+			if(overlaps_buildings(cursor_pos,building_radius) || !in_base(cursor_pos, building_radius) || left_money < SHOOTER_PRICE){
+				draw_rectangle(cursor_pos,glm::vec2(building_radius), invalid_color);
+			}
+			else{
+				draw_rectangle(cursor_pos,glm::vec2(building_radius), valid_color);
+			}
+			break;
+			break;
+		case BUILDING_WALL:
+			draw_wall(cursor_pos);
+			if(overlaps_buildings(cursor_pos,building_radius) || !in_base(cursor_pos, building_radius) || left_money < WALL_PRICE){
+				draw_rectangle(cursor_pos,glm::vec2(building_radius), invalid_color);
+			}
+			else{
+				draw_rectangle(cursor_pos,glm::vec2(building_radius), valid_color);
+			}
+			break;
 	}
 
-	//scores:
-	glm::vec2 score_radius = glm::vec2(0.1f, 0.1f);
-	for (uint32_t i = 0; i < left_score; ++i) {
-		draw_rectangle(glm::vec2( -court_radius.x + (2.0f + 3.0f * i) * score_radius.x, court_radius.y + 2.0f * wall_radius + 2.0f * score_radius.y), score_radius, fg_color);
+	//health:
+	glm::vec2 health_radius = glm::vec2(0.05f, 0.1f);
+	draw_rectangle(glm::vec2(-court_radius.x + health_radius.x * left_health / 2.0f, court_radius.y + 2.0f * wall_radius + 2.0f * health_radius.y),
+	               glm::vec2(health_radius.x * left_health / 2.0f, health_radius.y), fg_color);
+	draw_rectangle(glm::vec2(court_radius.x - health_radius.x * right_health / 2.0f, court_radius.y + 2.0f * wall_radius + 2.0f * health_radius.y),
+	               glm::vec2(health_radius.x * right_health / 2.0f, health_radius.y), fg_color);
+
+	//money - adapted from score drawing code
+	glm::vec2 money_radius = glm::vec2(0.1f, 0.1f);
+	for(uint32_t i = 0; i < left_money; ++i){
+		draw_rectangle(glm::vec2( -court_radius.x + (2.0f + 3.0f * i) * money_radius.x, -court_radius.y - 2.0f * wall_radius - 2.0f * money_radius.y), money_radius, money_color);
 	}
-	for (uint32_t i = 0; i < right_score; ++i) {
-		draw_rectangle(glm::vec2( court_radius.x - (2.0f + 3.0f * i) * score_radius.x, court_radius.y + 2.0f * wall_radius + 2.0f * score_radius.y), score_radius, fg_color);
+	for (uint32_t i = 0; i < right_money; ++i) {
+		draw_rectangle(glm::vec2( court_radius.x - (2.0f + 3.0f * i) * money_radius.x, -court_radius.y - 2.0f * wall_radius - 2.0f * money_radius.y), money_radius, money_color);
 	}
 
 	//------ compute court-to-window transform ------
@@ -401,11 +729,11 @@ void PongMode::draw(glm::uvec2 const &drawable_size) {
 	//compute area that should be visible:
 	glm::vec2 scene_min = glm::vec2(
 		-court_radius.x - 2.0f * wall_radius - padding,
-		-court_radius.y - 2.0f * wall_radius - padding
+		-court_radius.y - 2.0f * wall_radius - 2.0f * money_radius.y - padding
 	);
 	glm::vec2 scene_max = glm::vec2(
 		court_radius.x + 2.0f * wall_radius + padding,
-		court_radius.y + 2.0f * wall_radius + 3.0f * score_radius.y + padding
+		court_radius.y + 2.0f * wall_radius + 3.0f * health_radius.y + padding
 	);
 
 	//compute window aspect ratio:
