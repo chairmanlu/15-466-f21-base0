@@ -96,7 +96,7 @@ struct PongMode : Mode {
 	}
 
 	bool overlaps_buildings(glm::vec2 c, glm::vec2 r){
-		for(int i=0;i<buildings.size();i++){
+		for(size_t i=0;i<buildings.size();i++){
 			if(overlaps(c,r,buildings[i],building_radius)){
 				return true;
 			}
