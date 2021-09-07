@@ -280,7 +280,7 @@ void PongMode::update(float elapsed) {
 	ball += elapsed * speed_multiplier * ball_velocity;
 
 	//---- building cooldowns ----
-	for(int i=0;i<buildings.size();i++){
+	for(size_t i=0;i<buildings.size();i++){
 		building_cooldowns[i] -= elapsed;
 		while(building_cooldowns[i] < 0){
 			switch(abs(building_types[i])){
@@ -315,10 +315,10 @@ void PongMode::update(float elapsed) {
 		}
 	}
 
-	for(int i=0;i<left_bullets.size();i++){
+	for(size_t i=0;i<left_bullets.size();i++){
 		left_bullets[i].x += elapsed * bullet_speed;
 	}
-	for(int i=0;i<right_bullets.size();i++){
+	for(size_t i=0;i<right_bullets.size();i++){
 		right_bullets[i].x -= elapsed * bullet_speed;
 	}
 
@@ -360,7 +360,7 @@ void PongMode::update(float elapsed) {
 	paddle_vs_ball(left_paddle);
 	paddle_vs_ball(right_paddle);
 
-	for(int i=0;i<buildings.size();i++){
+	for(size_t i=0;i<buildings.size();i++){
 		if(overlaps(ball,ball_radius,buildings[i],building_radius)){
 			//Bounce back if hit wall
 			if(abs(building_types[i]) == BUILDING_WALL){
@@ -438,7 +438,7 @@ void PongMode::update(float elapsed) {
 
 	//Bullet collisions
 	
-	for(int i=0;i<left_bullets.size();i++){
+	for(size_t i=0;i<left_bullets.size();i++){
 		//walls from above
 		if (left_bullets[i].x > court_radius.x - bullet_radius.x) {
 			left_bullets.erase(left_bullets.begin() + i);
@@ -455,7 +455,7 @@ void PongMode::update(float elapsed) {
 		}
 
 		//Buildings
-		for(int j=0;j<buildings.size();j++){
+		for(size_t j=0;j<buildings.size();j++){
 			if(overlaps(buildings[j],building_radius,left_bullets[i],bullet_radius)){
 				if(abs(building_types[j]) != BUILDING_WALL){
 					buildings.erase(buildings.begin() + j);
@@ -468,7 +468,7 @@ void PongMode::update(float elapsed) {
 		}
 	}
 
-	for(int i=0;i<right_bullets.size();i++){
+	for(size_t i=0;i<right_bullets.size();i++){
 		//walls from above
 		if (right_bullets[i].x < -court_radius.x + bullet_radius.x) {
 			std::cout << "here\n" << std::endl;
@@ -486,7 +486,7 @@ void PongMode::update(float elapsed) {
 		}
 
 		//Buildings
-		for(int j=0;j<buildings.size();j++){
+		for(size_t j=0;j<buildings.size();j++){
 			if(overlaps(buildings[j],building_radius,right_bullets[i],bullet_radius)){
 				if(abs(building_types[j]) != BUILDING_WALL){
 					buildings.erase(buildings.begin() + j);
@@ -532,7 +532,6 @@ void PongMode::draw(glm::uvec2 const &drawable_size) {
 	const glm::u8vec4 shooter_color1 = HEX_TO_U8VEC4(0xffffffff);
 	const glm::u8vec4 shooter_color2 = HEX_TO_U8VEC4(0x000000ff);
 	const glm::u8vec4 wall_color = HEX_TO_U8VEC4(0xffffffff);
-	const glm::u8vec4 wall_preview_color = HEX_TO_U8VEC4(0xffffff80);
 	const glm::u8vec4 farm_color1 = HEX_TO_U8VEC4(0x0db507ff);
 	const glm::u8vec4 farm_color2 = HEX_TO_U8VEC4(0xbd6f17ff);
 	const std::vector< glm::u8vec4 > trail_colors = {
@@ -654,7 +653,7 @@ void PongMode::draw(glm::uvec2 const &drawable_size) {
 		draw_rectangle(glm::vec2(pos),glm::vec2(building_radius.x, building_radius.y / 4.0f), farm_color2);
 	};
 
-	for(int i=0;i<buildings.size();i++){
+	for(size_t i=0;i<buildings.size();i++){
 		switch(abs(building_types[i])){
 			case BUILDING_SHOOTER:
 				draw_shooter(buildings[i]);
@@ -669,10 +668,10 @@ void PongMode::draw(glm::uvec2 const &drawable_size) {
 	}
 
 	//bullets
-	for(int i=0;i<left_bullets.size();i++){
+	for(size_t i=0;i<left_bullets.size();i++){
 		draw_rectangle(glm::vec2(left_bullets[i]),glm::vec2(bullet_radius), fg_color);
 	}
-	for(int i=0;i<right_bullets.size();i++){
+	for(size_t i=0;i<right_bullets.size();i++){
 		draw_rectangle(glm::vec2(right_bullets[i]),glm::vec2(bullet_radius), fg_color);
 	}
 
